@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Аэропорты (создаются админом)
+model Airport {
+  id        String   @id @default(cuid())
+  icaoCode  String   @unique
+  iataCode  String?
+  name      String
+  city      String
+  country   String
+  latitude  Float
+  longitude Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  departures Flight[] @relation("DepartureAirport")
+  arrivals   Flight[] @relation("ArrivalAirport")
+}
+
+// Типы воздушных судов
+model AircraftType {
+  id          String   @id @default(cuid())
+  modelName   String   @unique
+  sizeCategory String  @default("medium") // small, medium, large
+  iconUrl     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  flights Flight[]
+}
+
+// Рейсы
+model Flight {
+  id                  String      @id @default(cuid())
+  flightNumber        String      @unique
+  aircraftTypeId      String
+  departureAirportId  String
+  arrivalAirportId    String
+  scheduledDeparture  DateTime
+  scheduledArrival    DateTime
+  status              String      @default("scheduled") // scheduled, active, completed, cancelled
+  isEmergency         Boolean     @default(false)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  aircraftType     AircraftType @relation(fields: [aircraftTypeId], references: [id])
+  departureAirport Airport      @relation("DepartureAirport", fields: [departureAirportId], references: [id])
+  arrivalAirport   Airport      @relation("ArrivalAirport", fields: [arrivalAirportId], references: [id])
+  positions        FlightPosition[]
+}
+
+// Точки маршрута (след самолёта)
+model FlightPosition {
+  id        String   @id @default(cuid())
+  flightId  String
+  latitude  Float
+  longitude Float
+  altitude  Int      @default(0)
+  speed     Int      @default(0)
+  heading   Int      @default(0)
+  createdAt DateTime @default(now())
+
+  flight Flight @relation(fields: [flightId], references: [id], onDelete: Cascade)
+
+  @@index([flightId, createdAt])
+}
+
+// Учётные записи админов (для NextAuth)
+model Admin {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String   // хешированный
+  name      String
+  createdAt DateTime @default(now())
+}
