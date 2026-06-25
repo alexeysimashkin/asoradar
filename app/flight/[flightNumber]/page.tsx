@@ -13,9 +13,28 @@ interface FlightData {
   scheduledDeparture: string;
   scheduledArrival: string;
   aircraftType: { modelName: string; sizeCategory: string };
-  departureAirport: { name: string; iataCode: string; city: string; latitude: number; longitude: number };
-  arrivalAirport: { name: string; iataCode: string; city: string; latitude: number; longitude: number };
-  positions: { latitude: number; longitude: number; altitude: number; speed: number; heading: number; createdAt: string }[];
+  departureAirport: {
+    name: string;
+    iataCode: string;
+    city: string;
+    latitude: number;
+    longitude: number;
+  };
+  arrivalAirport: {
+    name: string;
+    iataCode: string;
+    city: string;
+    latitude: number;
+    longitude: number;
+  };
+  positions: {
+    latitude: number;
+    longitude: number;
+    altitude: number;
+    speed: number;
+    heading: number;
+    createdAt: string;
+  }[];
 }
 
 export default function FlightPage() {
@@ -48,7 +67,9 @@ export default function FlightPage() {
       const lastPosition = flight.positions[flight.positions.length - 1];
       const since = lastPosition?.createdAt || new Date(0).toISOString();
 
-      const res = await fetch(`/api/flights/${flightNumber}/positions?since=${since}`);
+      const res = await fetch(
+        `/api/flights/${flightNumber}/positions?since=${since}`
+      );
       if (!res.ok) return;
 
       const newPositions = await res.json();
@@ -71,32 +92,32 @@ export default function FlightPage() {
     map.current = new maplibregl.Map({
       container: mapContainer.current,
       style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
-      center: [flight.departureAirport.longitude, flight.departureAirport.latitude],
+      center: [
+        flight.departureAirport.longitude,
+        flight.departureAirport.latitude,
+      ],
       zoom: 5,
     });
 
     map.current.addControl(new maplibregl.NavigationControl());
   }, [flight]);
 
-  // Отрисовка маршрута и следа
+  // Отрисовка всего на карте
   useEffect(() => {
     if (!map.current || !flight) return;
 
-    // Ждём загрузки карты
-    map.current.once("load", () => {
-      drawRoutes();
-    });
-
-    // Если карта уже загружена, рисуем сразу
-    if (map.current.loaded()) {
-      drawRoutes();
-    }
-
-    function drawRoutes() {
+    const drawRoutes = () => {
       if (!map.current || !flight) return;
 
-      // Удаляем старые слои если есть
-      ["planned-route", "actual-trail"].forEach((id) => {
+      // Удаляем старые слои и источники
+      [
+        "planned-route",
+        "actual-trail",
+        "departure-marker",
+        "arrival-marker",
+        "departure-label",
+        "arrival-label",
+      ].forEach((id) => {
         if (map.current!.getLayer(id)) map.current!.removeLayer(id);
         if (map.current!.getSource(id)) map.current!.removeSource(id);
       });
@@ -137,7 +158,10 @@ export default function FlightPage() {
 
       // --- Фактический след (сплошная линия) ---
       if (flight.positions.length >= 2) {
-        const trailCoords = flight.positions.map((p) => [p.longitude, p.latitude]);
+        const trailCoords = flight.positions.map((p) => [
+          p.longitude,
+          p.latitude,
+        ]);
 
         map.current.addSource("actual-trail", {
           type: "geojson",
@@ -167,36 +191,189 @@ export default function FlightPage() {
         });
       }
 
+      // --- Маркер аэропорта вылета (синий кружок) ---
+      map.current.addSource("departure-marker", {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "Point",
+            coordinates: [
+              flight.departureAirport.longitude,
+              flight.departureAirport.latitude,
+            ],
+          },
+        },
+      });
+
+      map.current.addLayer({
+        id: "departure-marker",
+        type: "circle",
+        source: "departure-marker",
+        paint: {
+          "circle-radius": 8,
+          "circle-color": "#3b82f6",
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#ffffff",
+          "circle-opacity": 0.9,
+        },
+      });
+
+      // --- Маркер аэропорта прилёта (красный кружок) ---
+      map.current.addSource("arrival-marker", {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "Point",
+            coordinates: [
+              flight.arrivalAirport.longitude,
+              flight.arrivalAirport.latitude,
+            ],
+          },
+        },
+      });
+
+      map.current.addLayer({
+        id: "arrival-marker",
+        type: "circle",
+        source: "arrival-marker",
+        paint: {
+          "circle-radius": 8,
+          "circle-color": "#ef4444",
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#ffffff",
+          "circle-opacity": 0.9,
+        },
+      });
+
+      // --- Подпись аэропорта вылета ---
+      map.current.addSource("departure-label", {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: {
+            name:
+              flight.departureAirport.iataCode ||
+              flight.departureAirport.city,
+          },
+          geometry: {
+            type: "Point",
+            coordinates: [
+              flight.departureAirport.longitude,
+              flight.departureAirport.latitude,
+            ],
+          },
+        },
+      });
+
+      map.current.addLayer({
+        id: "departure-label",
+        type: "symbol",
+        source: "departure-label",
+        layout: {
+          "text-field": ["get", "name"],
+          "text-offset": [0, -1.5],
+          "text-size": 12,
+        },
+        paint: {
+          "text-color": "#1e40af",
+          "text-halo-color": "#ffffff",
+          "text-halo-width": 1,
+        },
+      });
+
+      // --- Подпись аэропорта прилёта ---
+      map.current.addSource("arrival-label", {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: {
+            name:
+              flight.arrivalAirport.iataCode ||
+              flight.arrivalAirport.city,
+          },
+          geometry: {
+            type: "Point",
+            coordinates: [
+              flight.arrivalAirport.longitude,
+              flight.arrivalAirport.latitude,
+            ],
+          },
+        },
+      });
+
+      map.current.addLayer({
+        id: "arrival-label",
+        type: "symbol",
+        source: "arrival-label",
+        layout: {
+          "text-field": ["get", "name"],
+          "text-offset": [0, -1.5],
+          "text-size": 12,
+        },
+        paint: {
+          "text-color": "#991b1b",
+          "text-halo-color": "#ffffff",
+          "text-halo-width": 1,
+        },
+      });
+
       // --- Маркер самолёта ---
       updateMarker();
 
-      // Подгоняем карту под маршрут
+      // Подгоняем карту под весь маршрут
       const bounds = new maplibregl.LngLatBounds();
-      plannedCoords.forEach((c) => bounds.extend(c as [number, number]));
+      bounds.extend([
+        flight.departureAirport.longitude,
+        flight.departureAirport.latitude,
+      ]);
+      bounds.extend([
+        flight.arrivalAirport.longitude,
+        flight.arrivalAirport.latitude,
+      ]);
       flight.positions.forEach((p) => bounds.extend([p.longitude, p.latitude]));
-      map.current.fitBounds(bounds, { padding: 80 });
-    }
 
-    function updateMarker() {
+      if (!bounds.isEmpty()) {
+        map.current.fitBounds(bounds, { padding: 80 });
+      }
+    };
+
+    const updateMarker = () => {
       if (!map.current || !flight) return;
 
-      // Удаляем старый маркер
       if (markerRef.current) markerRef.current.remove();
 
       const lastPos = flight.positions[flight.positions.length - 1];
       const markerPos = lastPos
-        ? [lastPos.longitude, lastPos.latitude]
-        : [flight.departureAirport.longitude, flight.departureAirport.latitude];
+        ? ([lastPos.longitude, lastPos.latitude] as [number, number])
+        : ([
+            flight.departureAirport.longitude,
+            flight.departureAirport.latitude,
+          ] as [number, number]);
 
       const el = document.createElement("div");
       el.innerHTML = "✈️";
       el.style.fontSize = "28px";
-      el.style.transform = lastPos ? `rotate(${lastPos.heading}deg)` : "rotate(0deg)";
-      el.style.filter = flight.isEmergency ? "drop-shadow(0 0 6px red) hue-rotate(0deg) saturate(2)" : "none";
+      el.style.transform = lastPos
+        ? `rotate(${lastPos.heading}deg)`
+        : "rotate(0deg)";
+      el.style.filter = flight.isEmergency
+        ? "drop-shadow(0 0 6px red)"
+        : "none";
 
       markerRef.current = new maplibregl.Marker({ element: el })
-        .setLngLat(markerPos as [number, number])
-        .addTo(map.current);
+        .setLngLat(markerPos)
+        .addTo(map.current!);
+    };
+
+    // Ждём загрузки карты или рисуем сразу
+    if (map.current.loaded()) {
+      drawRoutes();
+    } else {
+      map.current.once("load", drawRoutes);
     }
   }, [flight?.positions.length, flight?.isEmergency]);
 
@@ -242,7 +419,9 @@ export default function FlightPage() {
         <div className="ml-auto flex gap-6 text-sm">
           <div>
             <span className="text-gray-400">Тип ВС:</span>{" "}
-            <span className="font-medium">{flight.aircraftType.modelName}</span>
+            <span className="font-medium">
+              {flight.aircraftType.modelName}
+            </span>
           </div>
           <div>
             <span className="text-gray-400">Статус:</span>{" "}
