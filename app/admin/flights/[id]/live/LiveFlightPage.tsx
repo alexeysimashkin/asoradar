@@ -19,6 +19,7 @@ export default function LiveFlightPage() {
   const [positions, setPositions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [message, setMessage] = useState("");
 
   const [newPoint, setNewPoint] = useState({
@@ -73,7 +74,6 @@ export default function LiveFlightPage() {
     });
   }, [loading]);
 
-  // Вычисление курса между двумя точками
   const getHeading = (p1: any, p2: any) => {
     const toRad = (deg: number) => (deg * Math.PI) / 180;
     const toDeg = (rad: number) => (rad * 180) / Math.PI;
@@ -127,11 +127,9 @@ export default function LiveFlightPage() {
 
     const lastPos = positions[positions.length - 1];
 
-    // Вычисляем курс: если есть предыдущая точка — курс между ними, иначе из поля heading
     let heading = lastPos?.heading || 0;
     if (positions.length >= 2) {
-      const prevPos = positions[positions.length - 2];
-      heading = getHeading(prevPos, lastPos);
+      heading = getHeading(positions[positions.length - 2], lastPos);
     }
 
     const markerPos: [number, number] = lastPos
@@ -148,8 +146,6 @@ export default function LiveFlightPage() {
     });
 
     markerRef.current = L.marker(markerPos, { icon }).addTo(map.current);
-
-    // НЕ дёргаем карту — убираем fitBounds
   }, [flight, positions]);
 
   const addPoint = async () => {
@@ -190,6 +186,34 @@ export default function LiveFlightPage() {
     setTimeout(() => setMessage(""), 3000);
   };
 
+  const completeFlight = async () => {
+    if (!confirm("Завершить рейс? Он будет помечен как прибывший.")) return;
+
+    setCompleting(true);
+    setMessage("");
+
+    try {
+      const res = await fetch(`/api/flights/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "completed" }),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setFlight(updated);
+        setMessage("✅ Рейс прибыл! Полёт завершён.");
+      } else {
+        setMessage("❌ Ошибка при завершении рейса");
+      }
+    } catch {
+      setMessage("❌ Ошибка сети");
+    }
+
+    setCompleting(false);
+    setTimeout(() => setMessage(""), 5000);
+  };
+
   const toggleEmergency = async () => {
     try {
       const res = await fetch(`/api/flights/${id}`, {
@@ -223,19 +247,36 @@ export default function LiveFlightPage() {
     );
   }
 
+  const isActive = flight.status === "active" || flight.status === "scheduled";
+
   return (
     <div className="h-screen flex flex-col">
       <div className="bg-gray-900 text-white p-3 flex items-center gap-4 flex-shrink-0 flex-wrap">
         <a href="/admin/flights" className="text-blue-400 hover:underline text-sm font-medium">← К рейсам</a>
         <h1 className="font-bold text-lg">{flight.flightNumber}</h1>
-        <span className={`px-2 py-0.5 rounded text-xs font-medium ${flight.status === "active" ? "bg-green-600" : "bg-yellow-600"}`}>
-          {flight.status === "active" ? "В воздухе" : "По расписанию"}
+        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+          flight.status === "active" ? "bg-green-600" :
+          flight.status === "completed" ? "bg-blue-600" :
+          "bg-yellow-600"
+        }`}>
+          {flight.status === "active" ? "В воздухе" :
+           flight.status === "completed" ? "Прибыл" :
+           "По расписанию"}
         </span>
         <span className="text-sm text-gray-400">Точек: {positions.length}</span>
-        <button onClick={toggleEmergency}
-          className={`ml-auto px-4 py-1.5 rounded text-sm font-bold transition ${flight.isEmergency ? "bg-red-600 hover:bg-red-700 animate-pulse" : "bg-gray-600 hover:bg-gray-700"}`}>
-          {flight.isEmergency ? "🔴 ТРЕВОГА" : "🟡 Сигнал бедствия"}
-        </button>
+
+        {isActive && (
+          <>
+            <button onClick={toggleEmergency}
+              className={`ml-auto px-4 py-1.5 rounded text-sm font-bold transition ${flight.isEmergency ? "bg-red-600 hover:bg-red-700 animate-pulse" : "bg-gray-600 hover:bg-gray-700"}`}>
+              {flight.isEmergency ? "🔴 ТРЕВОГА" : "🟡 Сигнал бедствия"}
+            </button>
+            <button onClick={completeFlight} disabled={completing}
+              className="px-4 py-1.5 rounded text-sm font-bold bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition">
+              {completing ? "⏳" : "🛬"} Рейс прибыл
+            </button>
+          </>
+        )}
       </div>
 
       {message && (
@@ -244,68 +285,89 @@ export default function LiveFlightPage() {
         </div>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
-        <div className="w-80 bg-gray-800 text-white shadow-lg p-4 overflow-y-auto flex-shrink-0">
-          <h2 className="font-bold text-lg mb-2">🎮 Управление</h2>
-          <p className="text-xs text-gray-400 mb-4">💡 Кликните по карте — координаты заполнятся</p>
+      {isActive ? (
+        <div className="flex flex-1 overflow-hidden">
+          <div className="w-80 bg-gray-800 text-white shadow-lg p-4 overflow-y-auto flex-shrink-0">
+            <h2 className="font-bold text-lg mb-2">🎮 Управление</h2>
+            <p className="text-xs text-gray-400 mb-4">💡 Кликните по карте — координаты заполнятся</p>
 
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-300 mb-1">Широта *</label>
-              <input type="number" step="any" value={newPoint.latitude}
-                onChange={(e) => setNewPoint({ ...newPoint, latitude: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white" placeholder="55.7558" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-300 mb-1">Долгота *</label>
-              <input type="number" step="any" value={newPoint.longitude}
-                onChange={(e) => setNewPoint({ ...newPoint, longitude: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white" placeholder="37.6173" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-300 mb-1">Высота (м)</label>
-              <input type="number" value={newPoint.altitude}
-                onChange={(e) => setNewPoint({ ...newPoint, altitude: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-300 mb-1">Скорость (км/ч)</label>
-              <input type="number" value={newPoint.speed}
-                onChange={(e) => setNewPoint({ ...newPoint, speed: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white" />
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1">Широта *</label>
+                <input type="number" step="any" value={newPoint.latitude}
+                  onChange={(e) => setNewPoint({ ...newPoint, latitude: e.target.value })}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white" placeholder="55.7558" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1">Долгота *</label>
+                <input type="number" step="any" value={newPoint.longitude}
+                  onChange={(e) => setNewPoint({ ...newPoint, longitude: e.target.value })}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white" placeholder="37.6173" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1">Высота (м)</label>
+                <input type="number" value={newPoint.altitude}
+                  onChange={(e) => setNewPoint({ ...newPoint, altitude: e.target.value })}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1">Скорость (км/ч)</label>
+                <input type="number" value={newPoint.speed}
+                  onChange={(e) => setNewPoint({ ...newPoint, speed: e.target.value })}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white" />
+              </div>
+
+              <button onClick={addPoint} disabled={saving}
+                className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 font-bold text-sm">
+                {saving ? "⏳ Обновление..." : "✅ Обновить позицию"}
+              </button>
             </div>
 
-            <button onClick={addPoint} disabled={saving}
-              className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 font-bold text-sm">
-              {saving ? "⏳ Обновление..." : "✅ Обновить позицию"}
-            </button>
+            <div className="mt-6">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">⚡ Быстрые точки</h3>
+              <div className="space-y-1">
+                {[
+                  { label: "Москва, центр", lat: 55.7558, lng: 37.6173, alt: 0, spd: 0 },
+                  { label: "Москва, север", lat: 55.85, lng: 37.6, alt: 3000, spd: 400 },
+                  { label: "Клин", lat: 56.3333, lng: 36.7333, alt: 10000, spd: 800 },
+                  { label: "Тверь", lat: 56.8587, lng: 35.9176, alt: 10000, spd: 850 },
+                  { label: "Санкт-Петербург", lat: 59.9343, lng: 30.3351, alt: 0, spd: 0 },
+                ].map((pt) => (
+                  <button key={pt.label}
+                    onClick={() => setNewPoint({
+                      latitude: pt.lat.toString(), longitude: pt.lng.toString(),
+                      altitude: pt.alt.toString(), speed: pt.spd.toString(), heading: "0",
+                    })}
+                    className="w-full text-left px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 rounded border border-gray-600">
+                    📍 {pt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-gray-700">
+              <button onClick={completeFlight} disabled={completing}
+                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 font-bold text-sm">
+                {completing ? "⏳ Завершение..." : "🛬 Рейс прибыл"}
+              </button>
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                Завершает рейс и убирает его с карты
+              </p>
+            </div>
           </div>
 
-          <div className="mt-6">
-            <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">⚡ Быстрые точки</h3>
-            <div className="space-y-1">
-              {[
-                { label: "Москва, центр", lat: 55.7558, lng: 37.6173, alt: 0, spd: 0 },
-                { label: "Москва, север", lat: 55.85, lng: 37.6, alt: 3000, spd: 400 },
-                { label: "Клин", lat: 56.3333, lng: 36.7333, alt: 10000, spd: 800 },
-                { label: "Тверь", lat: 56.8587, lng: 35.9176, alt: 10000, spd: 850 },
-                { label: "Санкт-Петербург", lat: 59.9343, lng: 30.3351, alt: 0, spd: 0 },
-              ].map((pt) => (
-                <button key={pt.label}
-                  onClick={() => setNewPoint({
-                    latitude: pt.lat.toString(), longitude: pt.lng.toString(),
-                    altitude: pt.alt.toString(), speed: pt.spd.toString(), heading: "0",
-                  })}
-                  className="w-full text-left px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 rounded border border-gray-600">
-                  📍 {pt.label}
-                </button>
-              ))}
-            </div>
+          <div ref={mapContainer} className="flex-1" style={{ minHeight: "400px" }} />
+        </div>
+      ) : (
+        <div className="flex-1 flex items-center justify-center bg-gray-800">
+          <div className="text-center text-white">
+            <div className="text-6xl mb-4">🛬</div>
+            <h2 className="text-2xl font-bold mb-2">Рейс завершён</h2>
+            <p className="text-gray-400 mb-6">Рейс {flight.flightNumber} прибыл в {flight.arrivalAirport?.name || "пункт назначения"}</p>
+            <a href="/admin/flights" className="text-blue-400 hover:underline">← К списку рейсов</a>
           </div>
         </div>
-
-        <div ref={mapContainer} className="flex-1" style={{ minHeight: "400px" }} />
-      </div>
+      )}
     </div>
   );
 }
