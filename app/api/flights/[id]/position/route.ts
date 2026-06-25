@@ -1,0 +1,29 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const body = await req.json();
+
+  // Добавляем точку
+  const position = await prisma.flightPosition.create({
+    data: {
+      flightId: params.id,
+      latitude: body.latitude,
+      longitude: body.longitude,
+      altitude: body.altitude || 0,
+      speed: body.speed || 0,
+      heading: body.heading || 0,
+    },
+  });
+
+  // Автоматически переводим рейс в статус active
+  await prisma.flight.update({
+    where: { id: params.id },
+    data: { status: "active" },
+  });
+
+  return NextResponse.json(position, { status: 201 });
+}
