@@ -52,11 +52,14 @@ export default function LiveFlightPage() {
     const lat = flight?.departureAirport?.latitude || 55.7558;
     const lng = flight?.departureAirport?.longitude || 37.6173;
 
-    map.current = L.map(mapContainer.current).setView([lat, lng], 5);
+    map.current = L.map(mapContainer.current, {
+      attributionControl: false,
+    }).setView([lat, lng], 5);
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 19,
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+      subdomains: "abcd",
+      maxZoom: 20,
     }).addTo(map.current);
 
     map.current.on("click", (e: L.LeafletMouseEvent) => {
@@ -70,6 +73,18 @@ export default function LiveFlightPage() {
     });
   }, [loading]);
 
+  // Вычисление курса между двумя точками
+  const getHeading = (p1: any, p2: any) => {
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const toDeg = (rad: number) => (rad * 180) / Math.PI;
+    const dLng = toRad(p2.longitude - p1.longitude);
+    const lat1 = toRad(p1.latitude);
+    const lat2 = toRad(p2.latitude);
+    const y = Math.sin(dLng) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+    return (toDeg(Math.atan2(y, x)) + 360) % 360;
+  };
+
   useEffect(() => {
     if (!map.current || !flight) return;
 
@@ -79,7 +94,6 @@ export default function LiveFlightPage() {
     if (depMarkerRef.current) map.current.removeLayer(depMarkerRef.current);
     if (arrMarkerRef.current) map.current.removeLayer(arrMarkerRef.current);
 
-    // Аэропорты
     if (flight.departureAirport?.latitude) {
       depMarkerRef.current = L.circleMarker(
         [flight.departureAirport.latitude, flight.departureAirport.longitude],
@@ -94,7 +108,6 @@ export default function LiveFlightPage() {
       ).addTo(map.current).bindPopup(`🛬 ${flight.arrivalAirport.name || "Прилёт"}`);
     }
 
-    // Плановый маршрут
     if (flight.departureAirport && flight.arrivalAirport) {
       plannedRef.current = L.polyline(
         [
@@ -105,7 +118,6 @@ export default function LiveFlightPage() {
       ).addTo(map.current);
     }
 
-    // Фактический след
     if (positions.length >= 2) {
       trailRef.current = L.polyline(
         positions.map((p: any) => [p.latitude, p.longitude]),
@@ -113,8 +125,15 @@ export default function LiveFlightPage() {
       ).addTo(map.current);
     }
 
-    // Самолёт
     const lastPos = positions[positions.length - 1];
+
+    // Вычисляем курс: если есть предыдущая точка — курс между ними, иначе из поля heading
+    let heading = lastPos?.heading || 0;
+    if (positions.length >= 2) {
+      const prevPos = positions[positions.length - 2];
+      heading = getHeading(prevPos, lastPos);
+    }
+
     const markerPos: [number, number] = lastPos
       ? [lastPos.latitude, lastPos.longitude]
       : flight.departureAirport?.latitude
@@ -122,7 +141,7 @@ export default function LiveFlightPage() {
       : [55.7558, 37.6173];
 
     const icon = L.divIcon({
-      html: `<div style="font-size: 32px; transform: rotate(${lastPos?.heading || 0}deg); filter: ${flight.isEmergency ? 'drop-shadow(0 0 8px red) brightness(0.7) sepia(1) hue-rotate(-50deg) saturate(5)' : 'none'};">✈️</div>`,
+      html: `<div style="font-size: 32px; transform: rotate(${heading}deg); filter: ${flight.isEmergency ? 'drop-shadow(0 0 8px red)' : 'none'}; transition: transform 0.5s;">✈️</div>`,
       className: "",
       iconSize: [36, 36],
       iconAnchor: [18, 18],
@@ -130,19 +149,7 @@ export default function LiveFlightPage() {
 
     markerRef.current = L.marker(markerPos, { icon }).addTo(map.current);
 
-    // Границы
-    const allPoints: [number, number][] = [];
-    if (flight.departureAirport?.latitude) {
-      allPoints.push([flight.departureAirport.latitude, flight.departureAirport.longitude]);
-    }
-    if (flight.arrivalAirport?.latitude) {
-      allPoints.push([flight.arrivalAirport.latitude, flight.arrivalAirport.longitude]);
-    }
-    positions.forEach((p: any) => allPoints.push([p.latitude, p.longitude]));
-
-    if (allPoints.length > 1) {
-      map.current.fitBounds(L.latLngBounds(allPoints), { padding: [50, 50] });
-    }
+    // НЕ дёргаем карту — убираем fitBounds
   }, [flight, positions]);
 
   const addPoint = async () => {
@@ -203,10 +210,7 @@ export default function LiveFlightPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-900 text-white">
-        <div className="text-center">
-          <div className="text-4xl mb-4">✈️</div>
-          <p>Загрузка...</p>
-        </div>
+        <div className="text-center"><div className="text-4xl mb-4">✈️</div><p>Загрузка...</p></div>
       </div>
     );
   }
@@ -270,12 +274,6 @@ export default function LiveFlightPage() {
                 onChange={(e) => setNewPoint({ ...newPoint, speed: e.target.value })}
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white" />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-300 mb-1">Курс (0-360°)</label>
-              <input type="number" value={newPoint.heading}
-                onChange={(e) => setNewPoint({ ...newPoint, heading: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white" />
-            </div>
 
             <button onClick={addPoint} disabled={saving}
               className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 font-bold text-sm">
@@ -287,16 +285,16 @@ export default function LiveFlightPage() {
             <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">⚡ Быстрые точки</h3>
             <div className="space-y-1">
               {[
-                { label: "Москва, центр", lat: 55.7558, lng: 37.6173, alt: 0, spd: 0, hdg: 0 },
-                { label: "Москва, север", lat: 55.85, lng: 37.6, alt: 3000, spd: 400, hdg: 0 },
-                { label: "Клин", lat: 56.3333, lng: 36.7333, alt: 10000, spd: 800, hdg: 315 },
-                { label: "Тверь", lat: 56.8587, lng: 35.9176, alt: 10000, spd: 850, hdg: 315 },
-                { label: "Санкт-Петербург", lat: 59.9343, lng: 30.3351, alt: 0, spd: 0, hdg: 0 },
+                { label: "Москва, центр", lat: 55.7558, lng: 37.6173, alt: 0, spd: 0 },
+                { label: "Москва, север", lat: 55.85, lng: 37.6, alt: 3000, spd: 400 },
+                { label: "Клин", lat: 56.3333, lng: 36.7333, alt: 10000, spd: 800 },
+                { label: "Тверь", lat: 56.8587, lng: 35.9176, alt: 10000, spd: 850 },
+                { label: "Санкт-Петербург", lat: 59.9343, lng: 30.3351, alt: 0, spd: 0 },
               ].map((pt) => (
                 <button key={pt.label}
                   onClick={() => setNewPoint({
                     latitude: pt.lat.toString(), longitude: pt.lng.toString(),
-                    altitude: pt.alt.toString(), speed: pt.spd.toString(), heading: pt.hdg.toString(),
+                    altitude: pt.alt.toString(), speed: pt.spd.toString(), heading: "0",
                   })}
                   className="w-full text-left px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 rounded border border-gray-600">
                   📍 {pt.label}
