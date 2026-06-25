@@ -8,7 +8,7 @@ export async function PUT(
 ) {
   const body = await req.json();
 
-  // Проверка уникальности (исключая текущий рейс)
+  // Проверка уникальности номера рейса (исключая текущий)
   if (body.flightNumber) {
     const existing = await prisma.flight.findFirst({
       where: {
@@ -16,6 +16,7 @@ export async function PUT(
         id: { not: params.id },
       },
     });
+
     if (existing) {
       return NextResponse.json(
         { error: "Рейс с таким номером уже существует" },
@@ -27,17 +28,14 @@ export async function PUT(
   const flight = await prisma.flight.update({
     where: { id: params.id },
     data: {
-      flightNumber: body.flightNumber,
-      aircraftTypeId: body.aircraftTypeId,
-      departureAirportId: body.departureAirportId,
-      arrivalAirportId: body.arrivalAirportId,
-      scheduledDeparture: body.scheduledDeparture
-        ? new Date(body.scheduledDeparture)
-        : undefined,
-      scheduledArrival: body.scheduledArrival
-        ? new Date(body.scheduledArrival)
-        : undefined,
-      status: body.status,
+      flightNumber: body.flightNumber !== undefined ? body.flightNumber : undefined,
+      aircraftTypeId: body.aircraftTypeId !== undefined ? body.aircraftTypeId : undefined,
+      departureAirportId: body.departureAirportId !== undefined ? body.departureAirportId : undefined,
+      arrivalAirportId: body.arrivalAirportId !== undefined ? body.arrivalAirportId : undefined,
+      scheduledDeparture: body.scheduledDeparture ? new Date(body.scheduledDeparture) : undefined,
+      scheduledArrival: body.scheduledArrival ? new Date(body.scheduledArrival) : undefined,
+      status: body.status !== undefined ? body.status : undefined,
+      isEmergency: body.isEmergency !== undefined ? body.isEmergency : undefined,
     },
   });
 
