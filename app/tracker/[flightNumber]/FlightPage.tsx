@@ -71,16 +71,29 @@ export default function FlightPage() {
   useEffect(() => {
     if (!mapContainer.current || map.current || !flight) return;
 
-    map.current = L.map(mapContainer.current).setView(
-      [flight.departureAirport.latitude, flight.departureAirport.longitude],
-      5
-    );
+    map.current = L.map(mapContainer.current, {
+      attributionControl: false,
+    }).setView([flight.departureAirport.latitude, flight.departureAirport.longitude], 5);
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 19,
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+      subdomains: "abcd",
+      maxZoom: 20,
     }).addTo(map.current);
+
+    L.control.attribution({ position: "bottomright", prefix: false }).addTo(map.current);
   }, [flight]);
+
+  const getHeading = (p1: any, p2: any) => {
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const toDeg = (rad: number) => (rad * 180) / Math.PI;
+    const dLng = toRad(p2.longitude - p1.longitude);
+    const lat1 = toRad(p1.latitude);
+    const lat2 = toRad(p2.latitude);
+    const y = Math.sin(dLng) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+    return (toDeg(Math.atan2(y, x)) + 360) % 360;
+  };
 
   useEffect(() => {
     if (!map.current || !flight) return;
@@ -91,19 +104,16 @@ export default function FlightPage() {
     if (depMarkerRef.current) map.current.removeLayer(depMarkerRef.current);
     if (arrMarkerRef.current) map.current.removeLayer(arrMarkerRef.current);
 
-    // Аэропорт вылета
     depMarkerRef.current = L.circleMarker(
       [flight.departureAirport.latitude, flight.departureAirport.longitude],
       { radius: 8, color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 0.9, weight: 2 }
     ).addTo(map.current).bindPopup(`🛫 ${flight.departureAirport.name}`);
 
-    // Аэропорт прилёта
     arrMarkerRef.current = L.circleMarker(
       [flight.arrivalAirport.latitude, flight.arrivalAirport.longitude],
       { radius: 8, color: "#ef4444", fillColor: "#ef4444", fillOpacity: 0.9, weight: 2 }
     ).addTo(map.current).bindPopup(`🛬 ${flight.arrivalAirport.name}`);
 
-    // Плановый маршрут
     plannedRef.current = L.polyline(
       [
         [flight.departureAirport.latitude, flight.departureAirport.longitude],
@@ -112,7 +122,6 @@ export default function FlightPage() {
       { color: "#94a3b8", weight: 2, dashArray: "8, 8", opacity: 0.7 }
     ).addTo(map.current);
 
-    // Фактический след
     if (flight.positions.length >= 2) {
       trailRef.current = L.polyline(
         flight.positions.map((p) => [p.latitude, p.longitude]),
@@ -120,14 +129,19 @@ export default function FlightPage() {
       ).addTo(map.current);
     }
 
-    // Самолёт
     const lastPos = flight.positions[flight.positions.length - 1];
+
+    let heading = lastPos?.heading || 0;
+    if (flight.positions.length >= 2) {
+      heading = getHeading(flight.positions[flight.positions.length - 2], lastPos);
+    }
+
     const markerPos: [number, number] = lastPos
       ? [lastPos.latitude, lastPos.longitude]
       : [flight.departureAirport.latitude, flight.departureAirport.longitude];
 
     const icon = L.divIcon({
-      html: `<div style="font-size: 32px; transform: rotate(${lastPos?.heading || 0}deg); filter: ${flight.isEmergency ? 'drop-shadow(0 0 8px red)' : 'none'};">✈️</div>`,
+      html: `<div style="font-size: 32px; transform: rotate(${heading}deg); filter: ${flight.isEmergency ? 'drop-shadow(0 0 8px red)' : 'none'}; transition: transform 0.5s;">✈️</div>`,
       className: "",
       iconSize: [36, 36],
       iconAnchor: [18, 18],
@@ -135,7 +149,6 @@ export default function FlightPage() {
 
     markerRef.current = L.marker(markerPos, { icon }).addTo(map.current);
 
-    // Границы
     const bounds = L.latLngBounds([
       [flight.departureAirport.latitude, flight.departureAirport.longitude],
       [flight.arrivalAirport.latitude, flight.arrivalAirport.longitude],
