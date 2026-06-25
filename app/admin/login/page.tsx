@@ -10,7 +10,7 @@ export default function LoginPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (password === "admin123") {
       document.cookie = "admin_token=asoradar-admin-2024; path=/; max-age=86400";
       router.push("/admin");
