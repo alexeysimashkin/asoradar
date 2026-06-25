@@ -1,6 +1,72 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+// Получить рейс (по ID или по номеру рейса — определяется автоматически)
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const param = params.id;
+
+  // Пробуем найти по ID (если это cuid)
+  let flight = await prisma.flight.findUnique({
+    where: { id: param },
+    include: {
+      aircraftType: { select: { modelName: true, sizeCategory: true } },
+      departureAirport: {
+        select: { name: true, iataCode: true, city: true, latitude: true, longitude: true },
+      },
+      arrivalAirport: {
+        select: { name: true, iataCode: true, city: true, latitude: true, longitude: true },
+      },
+      positions: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          latitude: true,
+          longitude: true,
+          altitude: true,
+          speed: true,
+          heading: true,
+          createdAt: true,
+        },
+      },
+    },
+  });
+
+  // Если не нашли по ID, пробуем по flightNumber
+  if (!flight) {
+    flight = await prisma.flight.findUnique({
+      where: { flightNumber: param },
+      include: {
+        aircraftType: { select: { modelName: true, sizeCategory: true } },
+        departureAirport: {
+          select: { name: true, iataCode: true, city: true, latitude: true, longitude: true },
+        },
+        arrivalAirport: {
+          select: { name: true, iataCode: true, city: true, latitude: true, longitude: true },
+        },
+        positions: {
+          orderBy: { createdAt: "asc" },
+          select: {
+            latitude: true,
+            longitude: true,
+            altitude: true,
+            speed: true,
+            heading: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+  }
+
+  if (!flight) {
+    return new NextResponse("Рейс не найден", { status: 404 });
+  }
+
+  return NextResponse.json(flight);
+}
+
 // Обновить рейс
 export async function PUT(
   req: NextRequest,
@@ -8,16 +74,25 @@ export async function PUT(
 ) {
   const body = await req.json();
 
-  // Проверка уникальности номера рейса (исключая текущий)
+  // Проверяем, что рейс существует (по ID)
+  const existing = await prisma.flight.findUnique({
+    where: { id: params.id },
+  });
+
+  if (!existing) {
+    return new NextResponse("Рейс не найден", { status: 404 });
+  }
+
+  // Проверка уникальности номера рейса
   if (body.flightNumber) {
-    const existing = await prisma.flight.findFirst({
+    const duplicate = await prisma.flight.findFirst({
       where: {
         flightNumber: body.flightNumber,
         id: { not: params.id },
       },
     });
 
-    if (existing) {
+    if (duplicate) {
       return NextResponse.json(
         { error: "Рейс с таким номером уже существует" },
         { status: 400 }
