@@ -1,17 +1,47 @@
-import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import AdminSidebar from "./AdminSidebar";
 
-export default async function AdminLayout({
+export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const cookieStore = cookies();
-  const token = cookieStore.get("admin_token")?.value;
+  const router = useRouter();
+  const pathname = usePathname();
+  const [isAuth, setIsAuth] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  if (token !== "asoradar-admin-2024") {
-    redirect("/admin/login");
+  useEffect(() => {
+    const token = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("admin_token="))
+      ?.split("=")[1];
+
+    if (token === "asoradar-admin-2024") {
+      setIsAuth(true);
+    } else if (pathname !== "/admin/login") {
+      router.push("/admin/login");
+    }
+    setLoading(false);
+  }, [pathname, router]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p>Загрузка...</p>
+      </div>
+    );
+  }
+
+  if (pathname === "/admin/login") {
+    return <>{children}</>;
+  }
+
+  if (!isAuth) {
+    return null;
   }
 
   return (
