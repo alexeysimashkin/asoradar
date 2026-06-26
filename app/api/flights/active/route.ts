@@ -2,8 +2,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
-  // Временно возвращаем ВСЕ рейсы, чтобы найти проблему
   const flights = await prisma.flight.findMany({
+    where: {
+      status: { in: ["active", "scheduled"] },
+      positions: { some: {} }, // только рейсы, у которых есть хотя бы одна точка
+    },
     include: {
       departureAirport: { select: { iataCode: true, city: true } },
       arrivalAirport: { select: { iataCode: true, city: true } },
