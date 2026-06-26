@@ -7,7 +7,6 @@ export async function POST(
 ) {
   const body = await req.json();
 
-  // Добавляем точку
   const position = await prisma.flightPosition.create({
     data: {
       flightId: params.id,
@@ -19,7 +18,6 @@ export async function POST(
     },
   });
 
-  // Переводим рейс в active (на случай если он был scheduled)
   await prisma.flight.update({
     where: { id: params.id },
     data: { status: "active" },
