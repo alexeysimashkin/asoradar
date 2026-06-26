@@ -187,7 +187,7 @@ export default function LiveFlightPage() {
   };
 
   const completeFlight = async () => {
-    if (!confirm("Завершить рейс? Он будет помечен как прибывший.")) return;
+    if (!confirm("Завершить рейс? Он будет помечен как прибывший и убран с карт.")) return;
 
     setCompleting(true);
     setMessage("");
@@ -351,7 +351,7 @@ export default function LiveFlightPage() {
                 {completing ? "⏳ Завершение..." : "🛬 Рейс прибыл"}
               </button>
               <p className="text-xs text-gray-500 mt-2 text-center">
-                Завершает рейс и убирает его с карты
+                Завершает рейс и убирает самолёт с карты
               </p>
             </div>
           </div>
@@ -363,7 +363,7 @@ export default function LiveFlightPage() {
           <div className="text-center text-white">
             <div className="text-6xl mb-4">🛬</div>
             <h2 className="text-2xl font-bold mb-2">Рейс завершён</h2>
-            <p className="text-gray-400 mb-6">Рейс {flight.flightNumber} прибыл в {flight.arrivalAirport?.name || "пункт назначения"}</p>
+            <p className="text-gray-400 mb-6">{flight.flightNumber} прибыл в {flight.arrivalAirport?.name || "пункт назначения"}</p>
             <a href="/admin/flights" className="text-blue-400 hover:underline">← К списку рейсов</a>
           </div>
         </div>
