@@ -45,6 +45,7 @@ export default function FlightPage() {
     fetchFlight();
   }, [flightNumber]);
 
+  // Автообновление позиций для активного рейса
   useEffect(() => {
     if (!flight || flight.status !== "active") return;
 
@@ -53,13 +54,14 @@ export default function FlightPage() {
       const since = lastPosition?.createdAt || new Date(0).toISOString();
 
       try {
-        const res = await fetch(`/api/flights/${flightNumber}/positions?since=${since}`);
+        const res = await fetch(`/api/flights/${flight.id}/positions?since=${encodeURIComponent(since)}`);
         if (res.ok) {
           const newPositions = await res.json();
-          if (newPositions.length > 0) {
-            setFlight((prev) =>
-              prev ? { ...prev, positions: [...prev.positions, ...newPositions] } : prev
-            );
+          if (newPositions && newPositions.length > 0) {
+            setFlight((prev) => {
+              if (!prev) return prev;
+              return { ...prev, positions: [...prev.positions, ...newPositions] };
+            });
           }
         }
       } catch {}
@@ -155,7 +157,7 @@ export default function FlightPage() {
     ]);
     flight.positions.forEach((p) => bounds.extend([p.latitude, p.longitude]));
     map.current.fitBounds(bounds, { padding: [50, 50] });
-  }, [flight?.positions.length, flight?.isEmergency]);
+  }, [flight?.positions, flight?.isEmergency]);
 
   if (loading) return <div className="flex items-center justify-center h-screen"><p>Загрузка...</p></div>;
   if (!flight) return <div className="flex items-center justify-center h-screen"><p>Рейс не найден</p></div>;
@@ -175,7 +177,18 @@ export default function FlightPage() {
         </div>
         <div className="ml-auto flex gap-6 text-sm">
           <div><span className="text-gray-400">Тип ВС:</span> <span className="font-medium">{flight.aircraftType.modelName}</span></div>
-          <div><span className="text-gray-400">Статус:</span> <span className={`font-medium ${flight.status === "active" ? "text-green-600" : flight.status === "scheduled" ? "text-blue-600" : "text-gray-600"}`}>{flight.status === "active" ? "В воздухе" : flight.status === "scheduled" ? "По расписанию" : flight.status}</span></div>
+          <div>
+            <span className="text-gray-400">Статус:</span>{" "}
+            <span className={`font-medium ${
+              flight.status === "active" ? "text-green-600" :
+              flight.status === "scheduled" ? "text-blue-600" :
+              flight.status === "completed" ? "text-gray-600" : "text-gray-600"
+            }`}>
+              {flight.status === "active" ? "В воздухе" :
+               flight.status === "scheduled" ? "По расписанию" :
+               flight.status === "completed" ? "Завершён" : flight.status}
+            </span>
+          </div>
           {flight.positions.length > 0 && (
             <>
               <div><span className="text-gray-400">Высота:</span> <span className="font-medium">{flight.positions[flight.positions.length - 1].altitude} м</span></div>
