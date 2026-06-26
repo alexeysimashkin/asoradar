@@ -19,7 +19,7 @@ export async function POST(
     },
   });
 
-  // Автоматически переводим рейс в статус active
+  // Переводим рейс в active (на случай если он был scheduled)
   await prisma.flight.update({
     where: { id: params.id },
     data: { status: "active" },
