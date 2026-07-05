@@ -79,7 +79,7 @@ export default function HomePage() {
       } else {
         const marker = L.marker([lastPos.latitude, lastPos.longitude], { icon })
           .addTo(map.current!)
-          .on("click", () => router.push(`/tracker/${flight.flightNumber}`));
+          .on("click", () => router.push(`/tracker/${flight.id}`));
         marker.bindPopup(`<b>${flight.flightNumber}</b><br>${flight.departureAirport.iataCode || flight.departureAirport.city} → ${flight.arrivalAirport.iataCode || flight.arrivalAirport.city}${flight.isEmergency ? ' 🔴 ТРЕВОГА' : ''}`);
         markersRef.current.set(flight.id, marker);
       }
@@ -95,7 +95,7 @@ export default function HomePage() {
       <div className="absolute top-4 left-4 z-[1000] bg-white rounded-lg shadow-lg p-2 w-80">
         <input
           type="text"
-          placeholder="Поиск рейса (например, SU1234)..."
+          placeholder="Поиск рейса (например, SM580)..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full px-3 py-2 border rounded-lg text-sm"
@@ -104,7 +104,7 @@ export default function HomePage() {
           <ul className="mt-2 max-h-40 overflow-y-auto border rounded-lg">
             {filteredFlights.map((f) => (
               <li key={f.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm border-b last:border-b-0"
-                onClick={() => router.push(`/tracker/${f.flightNumber}`)}>
+                onClick={() => router.push(`/tracker/${f.id}`)}>
                 <span className="font-bold">{f.flightNumber}</span> — {f.departureAirport.iataCode || f.departureAirport.city} → {f.arrivalAirport.iataCode || f.arrivalAirport.city}
                 {f.isEmergency && " 🔴"}
               </li>
