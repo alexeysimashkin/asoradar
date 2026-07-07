@@ -163,12 +163,17 @@ export default function FlightPage() {
 
     markerRef.current = L.marker(markerPos, { icon }).addTo(map.current);
 
-    const bounds = L.latLngBounds([
-      [flight.departureAirport.latitude, flight.departureAirport.longitude],
-      target?.latitude ? [target.latitude, target.longitude] : [flight.arrivalAirport.latitude, flight.arrivalAirport.longitude],
-    ]);
-    flight.positions.forEach((p) => bounds.extend([p.latitude, p.longitude]));
-    map.current.fitBounds(bounds, { padding: [50, 50] });
+    // Центрируем карту на последней позиции самолёта
+    if (lastPos) {
+      map.current.setView([lastPos.latitude, lastPos.longitude], map.current.getZoom());
+    } else {
+      const bounds = L.latLngBounds([
+        [flight.departureAirport.latitude, flight.departureAirport.longitude],
+        target?.latitude ? [target.latitude, target.longitude] : [flight.arrivalAirport.latitude, flight.arrivalAirport.longitude],
+      ]);
+      flight.positions.forEach((p) => bounds.extend([p.latitude, p.longitude]));
+      map.current.fitBounds(bounds, { padding: [50, 50] });
+    }
   }, [flight?.positions, flight?.isEmergency, flight?.divertedToAirport]);
 
   if (loading) return <div className="flex items-center justify-center h-screen"><p>Загрузка...</p></div>;
