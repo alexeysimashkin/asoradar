@@ -15,6 +15,7 @@ interface FlightData {
   aircraftType: { modelName: string; sizeCategory: string };
   departureAirport: { name: string; iataCode: string; city: string; latitude: number; longitude: number };
   arrivalAirport: { name: string; iataCode: string; city: string; latitude: number; longitude: number };
+  divertedToAirport?: { iataCode: string; name: string; latitude: number; longitude: number } | null;
   positions: { latitude: number; longitude: number; altitude: number; speed: number; heading: number; createdAt: string }[];
 }
 
@@ -27,6 +28,7 @@ export default function FlightPage() {
   const plannedRef = useRef<L.Polyline | null>(null);
   const depMarkerRef = useRef<L.CircleMarker | null>(null);
   const arrMarkerRef = useRef<L.CircleMarker | null>(null);
+  const divertMarkerRef = useRef<L.CircleMarker | null>(null);
   const [flight, setFlight] = useState<FlightData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -104,24 +106,35 @@ export default function FlightPage() {
     if (plannedRef.current) map.current.removeLayer(plannedRef.current);
     if (depMarkerRef.current) map.current.removeLayer(depMarkerRef.current);
     if (arrMarkerRef.current) map.current.removeLayer(arrMarkerRef.current);
+    if (divertMarkerRef.current) map.current.removeLayer(divertMarkerRef.current);
 
     depMarkerRef.current = L.circleMarker(
       [flight.departureAirport.latitude, flight.departureAirport.longitude],
       { radius: 8, color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 0.9, weight: 2 }
     ).addTo(map.current).bindPopup(`🛫 ${flight.departureAirport.name}`);
 
-    arrMarkerRef.current = L.circleMarker(
-      [flight.arrivalAirport.latitude, flight.arrivalAirport.longitude],
-      { radius: 8, color: "#ef4444", fillColor: "#ef4444", fillOpacity: 0.9, weight: 2 }
-    ).addTo(map.current).bindPopup(`🛬 ${flight.arrivalAirport.name}`);
-
-    plannedRef.current = L.polyline(
-      [
-        [flight.departureAirport.latitude, flight.departureAirport.longitude],
+    if (flight.divertedToAirport?.latitude) {
+      divertMarkerRef.current = L.circleMarker(
+        [flight.divertedToAirport.latitude, flight.divertedToAirport.longitude],
+        { radius: 10, color: "#f97316", fillColor: "#f97316", fillOpacity: 0.9, weight: 3 }
+      ).addTo(map.current).bindPopup(`⚠️ Перенаправлен в ${flight.divertedToAirport.name}`);
+    } else if (flight.arrivalAirport?.latitude) {
+      arrMarkerRef.current = L.circleMarker(
         [flight.arrivalAirport.latitude, flight.arrivalAirport.longitude],
-      ],
-      { color: "#94a3b8", weight: 2, dashArray: "8, 8", opacity: 0.7 }
-    ).addTo(map.current);
+        { radius: 8, color: "#ef4444", fillColor: "#ef4444", fillOpacity: 0.9, weight: 2 }
+      ).addTo(map.current).bindPopup(`🛬 ${flight.arrivalAirport.name}`);
+    }
+
+    const target = flight.divertedToAirport || flight.arrivalAirport;
+    if (flight.departureAirport && target?.latitude) {
+      plannedRef.current = L.polyline(
+        [
+          [flight.departureAirport.latitude, flight.departureAirport.longitude],
+          [target.latitude, target.longitude],
+        ],
+        { color: flight.divertedToAirport ? "#f97316" : "#94a3b8", weight: 3, dashArray: "10, 10", opacity: 0.8 }
+      ).addTo(map.current);
+    }
 
     if (flight.positions.length >= 2) {
       trailRef.current = L.polyline(
@@ -152,48 +165,55 @@ export default function FlightPage() {
 
     const bounds = L.latLngBounds([
       [flight.departureAirport.latitude, flight.departureAirport.longitude],
-      [flight.arrivalAirport.latitude, flight.arrivalAirport.longitude],
+      target?.latitude ? [target.latitude, target.longitude] : [flight.arrivalAirport.latitude, flight.arrivalAirport.longitude],
     ]);
     flight.positions.forEach((p) => bounds.extend([p.latitude, p.longitude]));
     map.current.fitBounds(bounds, { padding: [50, 50] });
-  }, [flight?.positions, flight?.isEmergency]);
+  }, [flight?.positions, flight?.isEmergency, flight?.divertedToAirport]);
 
   if (loading) return <div className="flex items-center justify-center h-screen"><p>Загрузка...</p></div>;
   if (!flight) return <div className="flex items-center justify-center h-screen"><p>Рейс не найден</p></div>;
 
   return (
     <main className="h-screen w-screen flex flex-col">
-      <div className="bg-white shadow-md p-4 flex items-center gap-6 flex-shrink-0 flex-wrap">
+      <div className="bg-white shadow-md p-4 flex-shrink-0">
         <a href="/" className="text-blue-600 hover:underline text-sm">← На главную</a>
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            {flight.flightNumber}
-            {flight.isEmergency && <span className="text-red-500 animate-pulse">🔴 Тревога</span>}
-          </h1>
-          <p className="text-sm text-gray-500">
-            {flight.departureAirport.city} ({flight.departureAirport.iataCode}) → {flight.arrivalAirport.city} ({flight.arrivalAirport.iataCode})
-          </p>
-        </div>
-        <div className="ml-auto flex gap-6 text-sm">
-          <div><span className="text-gray-400">Тип ВС:</span> <span className="font-medium">{flight.aircraftType.modelName}</span></div>
+        <div className="flex items-center gap-6 flex-wrap mt-2">
           <div>
-            <span className="text-gray-400">Статус:</span>{" "}
-            <span className={`font-medium ${
-              flight.status === "active" ? "text-green-600" :
-              flight.status === "scheduled" ? "text-blue-600" : "text-gray-600"
-            }`}>
-              {flight.status === "active" ? "В воздухе" :
-               flight.status === "scheduled" ? "По расписанию" :
-               flight.status === "completed" ? "Завершён" : flight.status}
-            </span>
+            <h1 className="text-xl font-bold flex items-center gap-2">
+              {flight.flightNumber}
+              {flight.isEmergency && <span className="text-red-500 animate-pulse">🔴 Тревога</span>}
+            </h1>
+            <p className="text-sm text-gray-500">
+              {flight.departureAirport.city} ({flight.departureAirport.iataCode}) → {flight.arrivalAirport.city} ({flight.arrivalAirport.iataCode})
+            </p>
           </div>
-          {flight.positions.length > 0 && (
-            <>
-              <div><span className="text-gray-400">Высота:</span> <span className="font-medium">{flight.positions[flight.positions.length - 1].altitude} м</span></div>
-              <div><span className="text-gray-400">Скорость:</span> <span className="font-medium">{flight.positions[flight.positions.length - 1].speed} км/ч</span></div>
-            </>
-          )}
+          <div className="ml-auto flex gap-6 text-sm">
+            <div><span className="text-gray-400">Тип ВС:</span> <span className="font-medium">{flight.aircraftType.modelName}</span></div>
+            <div>
+              <span className="text-gray-400">Статус:</span>{" "}
+              <span className={`font-medium ${
+                flight.status === "active" ? "text-green-600" :
+                flight.status === "scheduled" ? "text-blue-600" : "text-gray-600"
+              }`}>
+                {flight.status === "active" ? "В воздухе" :
+                 flight.status === "scheduled" ? "По расписанию" :
+                 flight.status === "completed" ? "Завершён" : flight.status}
+              </span>
+            </div>
+            {flight.positions.length > 0 && (
+              <>
+                <div><span className="text-gray-400">Высота:</span> <span className="font-medium">{flight.positions[flight.positions.length - 1].altitude} м</span></div>
+                <div><span className="text-gray-400">Скорость:</span> <span className="font-medium">{flight.positions[flight.positions.length - 1].speed} км/ч</span></div>
+              </>
+            )}
+          </div>
         </div>
+        {flight.divertedToAirport && (
+          <div className="mt-3 bg-red-50 border border-red-300 text-red-700 px-4 py-2 rounded text-sm font-medium">
+            ⚠️ Рейс перенаправляется в {flight.divertedToAirport.iataCode} — {flight.divertedToAirport.name}
+          </div>
+        )}
       </div>
       <div ref={mapContainer} className="flex-1 w-full" />
     </main>
