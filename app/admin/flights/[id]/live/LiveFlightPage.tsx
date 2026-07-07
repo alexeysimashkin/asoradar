@@ -14,13 +14,17 @@ export default function LiveFlightPage() {
   const plannedRef = useRef<L.Polyline | null>(null);
   const depMarkerRef = useRef<L.CircleMarker | null>(null);
   const arrMarkerRef = useRef<L.CircleMarker | null>(null);
+  const divertMarkerRef = useRef<L.CircleMarker | null>(null);
 
   const [flight, setFlight] = useState<any>(null);
   const [positions, setPositions] = useState<any[]>([]);
+  const [airports, setAirports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [message, setMessage] = useState("");
+  const [showDivert, setShowDivert] = useState(false);
+  const [divertAirportId, setDivertAirportId] = useState("");
 
   const [newPoint, setNewPoint] = useState({
     latitude: "",
@@ -35,6 +39,9 @@ export default function LiveFlightPage() {
       const res = await fetch(`/api/flights/${id}/admin`);
       const data = await res.json();
       setFlight(data);
+      if (data.divertedToAirportId) {
+        setDivertAirportId(data.divertedToAirportId);
+      }
 
       const posRes = await fetch(`/api/flights/${id}/positions/all`);
       const posData = await posRes.json();
@@ -45,6 +52,7 @@ export default function LiveFlightPage() {
 
   useEffect(() => {
     fetchFlight();
+    fetch("/api/airports").then((r) => r.json()).then(setAirports);
   }, [fetchFlight]);
 
   useEffect(() => {
@@ -93,6 +101,7 @@ export default function LiveFlightPage() {
     if (plannedRef.current) map.current.removeLayer(plannedRef.current);
     if (depMarkerRef.current) map.current.removeLayer(depMarkerRef.current);
     if (arrMarkerRef.current) map.current.removeLayer(arrMarkerRef.current);
+    if (divertMarkerRef.current) map.current.removeLayer(divertMarkerRef.current);
 
     if (flight.departureAirport?.latitude) {
       depMarkerRef.current = L.circleMarker(
@@ -101,20 +110,28 @@ export default function LiveFlightPage() {
       ).addTo(map.current).bindPopup(`🛫 ${flight.departureAirport.name || "Вылет"}`);
     }
 
-    if (flight.arrivalAirport?.latitude) {
+    if (flight.arrivalAirport?.latitude && !flight.divertedToAirport) {
       arrMarkerRef.current = L.circleMarker(
         [flight.arrivalAirport.latitude, flight.arrivalAirport.longitude],
         { radius: 8, color: "#ef4444", fillColor: "#ef4444", fillOpacity: 0.9, weight: 2 }
       ).addTo(map.current).bindPopup(`🛬 ${flight.arrivalAirport.name || "Прилёт"}`);
     }
 
-    if (flight.departureAirport && flight.arrivalAirport) {
+    if (flight.divertedToAirport?.latitude) {
+      divertMarkerRef.current = L.circleMarker(
+        [flight.divertedToAirport.latitude, flight.divertedToAirport.longitude],
+        { radius: 10, color: "#f97316", fillColor: "#f97316", fillOpacity: 0.9, weight: 3 }
+      ).addTo(map.current).bindPopup(`⚠️ Перенаправлен: ${flight.divertedToAirport.name}`);
+    }
+
+    const target = flight.divertedToAirport || flight.arrivalAirport;
+    if (flight.departureAirport && target?.latitude) {
       plannedRef.current = L.polyline(
         [
           [flight.departureAirport.latitude, flight.departureAirport.longitude],
-          [flight.arrivalAirport.latitude, flight.arrivalAirport.longitude],
+          [target.latitude, target.longitude],
         ],
-        { color: "#94a3b8", weight: 2, dashArray: "8, 8", opacity: 0.7 }
+        { color: flight.divertedToAirport ? "#f97316" : "#94a3b8", weight: 3, dashArray: "10, 10", opacity: 0.8 }
       ).addTo(map.current);
     }
 
@@ -146,6 +163,10 @@ export default function LiveFlightPage() {
     });
 
     markerRef.current = L.marker(markerPos, { icon }).addTo(map.current);
+
+    if (lastPos) {
+      map.current.setView([lastPos.latitude, lastPos.longitude], map.current.getZoom());
+    }
   }, [flight, positions]);
 
   const addPoint = async () => {
@@ -186,32 +207,49 @@ export default function LiveFlightPage() {
     setTimeout(() => setMessage(""), 3000);
   };
 
-  const completeFlight = async () => {
-    if (!confirm("Завершить рейс? Он будет помечен как прибывший и убран с карт.")) return;
-
-    setCompleting(true);
+  const saveDivert = async () => {
+    setSaving(true);
     setMessage("");
 
+    try {
+      const res = await fetch(`/api/flights/${id}/divert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ airportId: divertAirportId || null }),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setFlight(updated);
+        setMessage(divertAirportId ? "✅ Рейс перенаправлен!" : "✅ Перенаправление отменено");
+        setShowDivert(false);
+      } else {
+        setMessage("❌ Ошибка");
+      }
+    } catch {
+      setMessage("❌ Ошибка сети");
+    }
+
+    setSaving(false);
+    setTimeout(() => setMessage(""), 3000);
+  };
+
+  const completeFlight = async () => {
+    if (!confirm("Завершить рейс?")) return;
+    setCompleting(true);
     try {
       const res = await fetch(`/api/flights/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "completed" }),
       });
-
       if (res.ok) {
         const updated = await res.json();
         setFlight(updated);
-        setMessage("✅ Рейс прибыл! Полёт завершён.");
-      } else {
-        setMessage("❌ Ошибка при завершении рейса");
+        setMessage("✅ Рейс прибыл!");
       }
-    } catch {
-      setMessage("❌ Ошибка сети");
-    }
-
+    } catch {}
     setCompleting(false);
-    setTimeout(() => setMessage(""), 5000);
   };
 
   const toggleEmergency = async () => {
@@ -221,7 +259,6 @@ export default function LiveFlightPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isEmergency: !flight.isEmergency }),
       });
-
       if (res.ok) {
         const updated = await res.json();
         setFlight(updated);
@@ -263,16 +300,25 @@ export default function LiveFlightPage() {
            flight.status === "completed" ? "Прибыл" :
            "По расписанию"}
         </span>
+        {flight.divertedToAirport && (
+          <span className="px-2 py-0.5 rounded text-xs font-medium bg-orange-600">
+            Перенаправлен в {flight.divertedToAirport.iataCode}
+          </span>
+        )}
         <span className="text-sm text-gray-400">Точек: {positions.length}</span>
 
         {isActive && (
           <>
+            <button onClick={() => setShowDivert(!showDivert)}
+              className="px-3 py-1.5 rounded text-sm font-bold bg-orange-600 hover:bg-orange-700 transition">
+              🔄 Перенаправить
+            </button>
             <button onClick={toggleEmergency}
-              className={`ml-auto px-4 py-1.5 rounded text-sm font-bold transition ${flight.isEmergency ? "bg-red-600 hover:bg-red-700 animate-pulse" : "bg-gray-600 hover:bg-gray-700"}`}>
+              className={`px-3 py-1.5 rounded text-sm font-bold transition ${flight.isEmergency ? "bg-red-600 hover:bg-red-700 animate-pulse" : "bg-gray-600 hover:bg-gray-700"}`}>
               {flight.isEmergency ? "🔴 ТРЕВОГА" : "🟡 Сигнал бедствия"}
             </button>
             <button onClick={completeFlight} disabled={completing}
-              className="px-4 py-1.5 rounded text-sm font-bold bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition">
+              className="px-3 py-1.5 rounded text-sm font-bold bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition">
               {completing ? "⏳" : "🛬"} Рейс прибыл
             </button>
           </>
@@ -282,6 +328,34 @@ export default function LiveFlightPage() {
       {message && (
         <div className={`px-4 py-2 text-sm text-center font-medium text-white ${message.includes("❌") ? "bg-red-600" : "bg-green-600"}`}>
           {message}
+        </div>
+      )}
+
+      {showDivert && (
+        <div className="bg-gray-800 border-b border-gray-700 p-4 text-white">
+          <div className="flex items-center gap-4 flex-wrap">
+            <span className="text-sm font-medium">🔄 Перенаправить в:</span>
+            <select
+              value={divertAirportId}
+              onChange={(e) => setDivertAirportId(e.target.value)}
+              className="px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white"
+            >
+              <option value="">Отменить перенаправление</option>
+              {airports.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.iataCode || "?"} — {a.name} ({a.city})
+                </option>
+              ))}
+            </select>
+            <button onClick={saveDivert} disabled={saving}
+              className="px-4 py-1.5 rounded text-sm font-bold bg-orange-600 hover:bg-orange-700 disabled:opacity-50">
+              {saving ? "⏳" : "💾"} Сохранить
+            </button>
+            <button onClick={() => setShowDivert(false)}
+              className="px-3 py-1.5 rounded text-sm bg-gray-600 hover:bg-gray-700">
+              ✕ Закрыть
+            </button>
+          </div>
         </div>
       )}
 
@@ -344,16 +418,6 @@ export default function LiveFlightPage() {
                 ))}
               </div>
             </div>
-
-            <div className="mt-6 pt-4 border-t border-gray-700">
-              <button onClick={completeFlight} disabled={completing}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 font-bold text-sm">
-                {completing ? "⏳ Завершение..." : "🛬 Рейс прибыл"}
-              </button>
-              <p className="text-xs text-gray-500 mt-2 text-center">
-                Завершает рейс и убирает самолёт с карты
-              </p>
-            </div>
           </div>
 
           <div ref={mapContainer} className="flex-1" style={{ minHeight: "400px" }} />
@@ -363,7 +427,7 @@ export default function LiveFlightPage() {
           <div className="text-center text-white">
             <div className="text-6xl mb-4">🛬</div>
             <h2 className="text-2xl font-bold mb-2">Рейс завершён</h2>
-            <p className="text-gray-400 mb-6">{flight.flightNumber} прибыл в {flight.arrivalAirport?.name || "пункт назначения"}</p>
+            <p className="text-gray-400 mb-6">{flight.flightNumber} прибыл</p>
             <a href="/admin/flights" className="text-blue-400 hover:underline">← К списку рейсов</a>
           </div>
         </div>
