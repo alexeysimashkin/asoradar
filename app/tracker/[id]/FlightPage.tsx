@@ -74,9 +74,13 @@ export default function FlightPage() {
   useEffect(() => {
     if (!mapContainer.current || map.current || !flight) return;
 
+    const lastPos = flight.positions[flight.positions.length - 1];
+    const centerLat = lastPos?.latitude || flight.departureAirport.latitude;
+    const centerLng = lastPos?.longitude || flight.departureAirport.longitude;
+
     map.current = L.map(mapContainer.current, {
       attributionControl: false,
-    }).setView([flight.departureAirport.latitude, flight.departureAirport.longitude], 5);
+    }).setView([centerLat, centerLng], 10);
 
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
       attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
@@ -163,16 +167,9 @@ export default function FlightPage() {
 
     markerRef.current = L.marker(markerPos, { icon }).addTo(map.current);
 
-    // Центрируем карту на последней позиции самолёта
+    // Приближаем карту к самолёту (zoom 12)
     if (lastPos) {
-      map.current.setView([lastPos.latitude, lastPos.longitude], map.current.getZoom());
-    } else {
-      const bounds = L.latLngBounds([
-        [flight.departureAirport.latitude, flight.departureAirport.longitude],
-        target?.latitude ? [target.latitude, target.longitude] : [flight.arrivalAirport.latitude, flight.arrivalAirport.longitude],
-      ]);
-      flight.positions.forEach((p) => bounds.extend([p.latitude, p.longitude]));
-      map.current.fitBounds(bounds, { padding: [50, 50] });
+      map.current.setView([lastPos.latitude, lastPos.longitude], 12);
     }
   }, [flight?.positions, flight?.isEmergency, flight?.divertedToAirport]);
 
