@@ -15,6 +15,9 @@ export async function GET(
       arrivalAirport: {
         select: { name: true, iataCode: true, city: true, latitude: true, longitude: true },
       },
+      divertedToAirport: {
+        select: { iataCode: true, name: true, latitude: true, longitude: true },
+      },
       positions: {
         orderBy: { createdAt: "asc" },
         select: {
