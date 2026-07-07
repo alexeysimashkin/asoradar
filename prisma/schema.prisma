@@ -7,36 +7,34 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Аэропорты (создаются админом)
 model Airport {
-  id        String   @id @default(cuid())
-  icaoCode  String   @unique
-  iataCode  String?
-  name      String
-  city      String
-  country   String
-  latitude  Float
-  longitude Float
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  icaoCode        String   @unique
+  iataCode        String?
+  name            String
+  city            String
+  country         String
+  latitude        Float
+  longitude       Float
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  departures Flight[] @relation("DepartureAirport")
-  arrivals   Flight[] @relation("ArrivalAirport")
+  departures      Flight[] @relation("DepartureAirport")
+  arrivals        Flight[] @relation("ArrivalAirport")
+  divertedFlights Flight[] @relation("DivertedAirport")
 }
 
-// Типы воздушных судов
 model AircraftType {
-  id          String   @id @default(cuid())
-  modelName   String   @unique
-  sizeCategory String  @default("medium") // small, medium, large
-  iconUrl     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  modelName    String   @unique
+  sizeCategory String   @default("medium")
+  iconUrl      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   flights Flight[]
 }
 
-// Рейсы
 model Flight {
   id                  String      @id @default(cuid())
   flightNumber        String      @unique
@@ -45,18 +43,20 @@ model Flight {
   arrivalAirportId    String
   scheduledDeparture  DateTime
   scheduledArrival    DateTime
-  status              String      @default("scheduled") // scheduled, active, completed, cancelled
+  status              String      @default("scheduled")
   isEmergency         Boolean     @default(false)
+  divertedToAirportId String?
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
 
-  aircraftType     AircraftType @relation(fields: [aircraftTypeId], references: [id])
-  departureAirport Airport      @relation("DepartureAirport", fields: [departureAirportId], references: [id])
-  arrivalAirport   Airport      @relation("ArrivalAirport", fields: [arrivalAirportId], references: [id])
-  positions        FlightPosition[]
+  aircraftType       AircraftType @relation(fields: [aircraftTypeId], references: [id])
+  departureAirport   Airport      @relation("DepartureAirport", fields: [departureAirportId], references: [id])
+  arrivalAirport     Airport      @relation("ArrivalAirport", fields: [arrivalAirportId], references: [id])
+  divertedToAirport  Airport?     @relation("DivertedAirport", fields: [divertedToAirportId], references: [id])
+  positions          FlightPosition[]
+  route              FlightRoute?
 }
 
-// Точки маршрута (след самолёта)
 model FlightPosition {
   id        String   @id @default(cuid())
   flightId  String
@@ -72,11 +72,35 @@ model FlightPosition {
   @@index([flightId, createdAt])
 }
 
-// Учётные записи админов (для NextAuth)
+model FlightRoute {
+  id            String   @id @default(cuid())
+  flightId      String   @unique
+  totalDuration Int
+  isActive      Boolean  @default(false)
+  startedAt     DateTime?
+  createdAt     DateTime @default(now())
+
+  flight Flight  @relation(fields: [flightId], references: [id], onDelete: Cascade)
+  points RoutePoint[]
+}
+
+model RoutePoint {
+  id            String   @id @default(cuid())
+  flightRouteId String
+  latitude      Float
+  longitude     Float
+  altitude      Int      @default(10000)
+  speed         Int      @default(850)
+  orderIndex    Int
+  createdAt     DateTime @default(now())
+
+  route FlightRoute @relation(fields: [flightRouteId], references: [id], onDelete: Cascade)
+}
+
 model Admin {
   id        String   @id @default(cuid())
   email     String   @unique
-  password  String   // хешированный
+  password  String
   name      String
   createdAt DateTime @default(now())
 }
