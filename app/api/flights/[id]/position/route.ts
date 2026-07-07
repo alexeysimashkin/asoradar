@@ -1,27 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function POST(
+export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const body = await req.json();
+  const since = req.nextUrl.searchParams.get("since");
 
-  const position = await prisma.flightPosition.create({
-    data: {
+  if (!since) {
+    return new NextResponse("Параметр since обязателен", { status: 400 });
+  }
+
+  const positions = await prisma.flightPosition.findMany({
+    where: {
       flightId: params.id,
-      latitude: body.latitude,
-      longitude: body.longitude,
-      altitude: body.altitude || 0,
-      speed: body.speed || 0,
-      heading: body.heading || 0,
+      createdAt: { gt: new Date(since) },
+    },
+    orderBy: { createdAt: "asc" },
+    select: {
+      latitude: true,
+      longitude: true,
+      altitude: true,
+      speed: true,
+      heading: true,
+      createdAt: true,
     },
   });
 
-  await prisma.flight.update({
-    where: { id: params.id },
-    data: { status: "active" },
-  });
-
-  return NextResponse.json(position, { status: 201 });
+  return NextResponse.json(positions);
 }
