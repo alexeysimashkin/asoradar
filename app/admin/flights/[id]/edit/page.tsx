@@ -141,7 +141,6 @@ export default function EditFlightPage() {
       )}
 
       <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow p-6 space-y-5">
-        {/* Номер рейса */}
         <div>
           <label className="block text-sm font-medium mb-1">Номер рейса *</label>
           <input
@@ -154,7 +153,6 @@ export default function EditFlightPage() {
           />
         </div>
 
-        {/* Статус */}
         <div>
           <label className="block text-sm font-medium mb-1">Статус</label>
           <select
@@ -169,7 +167,6 @@ export default function EditFlightPage() {
           </select>
         </div>
 
-        {/* Тип ВС */}
         <div>
           <label className="block text-sm font-medium mb-1">Тип ВС *</label>
           <select
@@ -186,7 +183,6 @@ export default function EditFlightPage() {
           </select>
         </div>
 
-        {/* Аэропорты */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium mb-1">Вылет *</label>
@@ -224,7 +220,6 @@ export default function EditFlightPage() {
           </div>
         </div>
 
-        {/* Даты */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium mb-1">Дата вылета *</label>
