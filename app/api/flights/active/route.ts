@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 export async function GET() {
   const flights = await prisma.flight.findMany({
     where: {
-      status: { in: ["active", "scheduled"] },
+      status: { not: "cancelled" },
     },
     include: {
       departureAirport: { select: { iataCode: true, city: true } },
