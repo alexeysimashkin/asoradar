@@ -19,6 +19,7 @@ export async function POST(
       },
     });
 
+    // ВСЕГДА меняем статус на active при добавлении точки
     await prisma.flight.update({
       where: { id: params.id },
       data: { status: "active" },
