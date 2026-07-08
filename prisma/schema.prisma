@@ -43,6 +43,8 @@ model Flight {
   arrivalAirportId    String
   scheduledDeparture  DateTime
   scheduledArrival    DateTime
+  actualDeparture     DateTime?
+  actualArrival       DateTime?
   status              String      @default("scheduled")
   isEmergency         Boolean     @default(false)
   divertedToAirportId String?
