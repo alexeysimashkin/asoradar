@@ -21,6 +21,7 @@ export default function HomePage() {
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
   const [flights, setFlights] = useState<Flight[]>([]);
   const [search, setSearch] = useState("");
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
@@ -36,6 +37,7 @@ export default function HomePage() {
     }).addTo(map.current);
 
     L.control.attribution({ position: "bottomright", prefix: false }).addTo(map.current);
+    setInitialized(true);
   }, []);
 
   const fetchFlights = useCallback(async () => {
@@ -63,9 +65,13 @@ export default function HomePage() {
       }
     });
 
+    const bounds: [number, number][] = [];
+
     flights.forEach((flight) => {
       const lastPos = flight.positions[flight.positions.length - 1];
       if (!lastPos) return;
+
+      bounds.push([lastPos.latitude, lastPos.longitude]);
 
       const icon = L.divIcon({
         html: `<div style="width: 24px; height: 24px; border-radius: 50%; background: ${flight.isEmergency ? '#ef4444' : '#eab308'}; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-size: 12px; color: white; font-weight: bold;">✈</div>`,
@@ -84,7 +90,11 @@ export default function HomePage() {
         markersRef.current.set(flight.id, marker);
       }
     });
-  }, [flights, router]);
+
+    if (bounds.length > 1 && initialized) {
+      map.current.fitBounds(L.latLngBounds(bounds), { padding: [50, 50] });
+    }
+  }, [flights, router, initialized]);
 
   const filteredFlights = flights.filter((f) =>
     f.flightNumber.toLowerCase().includes(search.toLowerCase())
@@ -95,7 +105,7 @@ export default function HomePage() {
       <div className="absolute top-4 left-4 z-[1000] bg-white rounded-lg shadow-lg p-2 w-80">
         <input
           type="text"
-          placeholder="Поиск рейса (например, SM580)..."
+          placeholder="Поиск рейса (например, 6N2305A)..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full px-3 py-2 border rounded-lg text-sm"
