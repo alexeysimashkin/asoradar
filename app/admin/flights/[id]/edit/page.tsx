@@ -34,6 +34,10 @@ export default function EditFlightPage() {
     scheduledDepartureTime: "",
     scheduledArrivalDate: "",
     scheduledArrivalTime: "",
+    actualDepartureDate: "",
+    actualDepartureTime: "",
+    actualArrivalDate: "",
+    actualArrivalTime: "",
     status: "",
   });
 
@@ -64,6 +68,10 @@ export default function EditFlightPage() {
         scheduledDepartureTime: dep.toTimeString().slice(0, 5),
         scheduledArrivalDate: arr.toISOString().split("T")[0],
         scheduledArrivalTime: arr.toTimeString().slice(0, 5),
+        actualDepartureDate: flightData.actualDeparture ? new Date(flightData.actualDeparture).toISOString().split("T")[0] : "",
+        actualDepartureTime: flightData.actualDeparture ? new Date(flightData.actualDeparture).toTimeString().slice(0, 5) : "",
+        actualArrivalDate: flightData.actualArrival ? new Date(flightData.actualArrival).toISOString().split("T")[0] : "",
+        actualArrivalTime: flightData.actualArrival ? new Date(flightData.actualArrival).toTimeString().slice(0, 5) : "",
         status: flightData.status,
       });
 
@@ -86,18 +94,32 @@ export default function EditFlightPage() {
       `${form.scheduledArrivalDate}T${form.scheduledArrivalTime}:00`
     ).toISOString();
 
+    const body: any = {
+      flightNumber: form.flightNumber,
+      aircraftTypeId: form.aircraftTypeId,
+      departureAirportId: form.departureAirportId,
+      arrivalAirportId: form.arrivalAirportId,
+      scheduledDeparture,
+      scheduledArrival,
+      status: form.status,
+    };
+
+    if (form.actualDepartureDate && form.actualDepartureTime) {
+      body.actualDeparture = new Date(`${form.actualDepartureDate}T${form.actualDepartureTime}:00`).toISOString();
+    } else {
+      body.actualDeparture = null;
+    }
+
+    if (form.actualArrivalDate && form.actualArrivalTime) {
+      body.actualArrival = new Date(`${form.actualArrivalDate}T${form.actualArrivalTime}:00`).toISOString();
+    } else {
+      body.actualArrival = null;
+    }
+
     const res = await fetch(`/api/flights/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        flightNumber: form.flightNumber,
-        aircraftTypeId: form.aircraftTypeId,
-        departureAirportId: form.departureAirportId,
-        arrivalAirportId: form.arrivalAirportId,
-        scheduledDeparture,
-        scheduledArrival,
-        status: form.status,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (res.ok) {
@@ -143,23 +165,16 @@ export default function EditFlightPage() {
       <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow p-6 space-y-5">
         <div>
           <label className="block text-sm font-medium mb-1">Номер рейса *</label>
-          <input
-            type="text"
-            value={form.flightNumber}
+          <input type="text" value={form.flightNumber}
             onChange={(e) => setForm({ ...form, flightNumber: e.target.value })}
-            required
-            maxLength={10}
-            className="w-full px-3 py-2 border rounded-lg text-sm"
-          />
+            required maxLength={10} className="w-full px-3 py-2 border rounded-lg text-sm" />
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">Статус</label>
-          <select
-            value={form.status}
+          <select value={form.status}
             onChange={(e) => setForm({ ...form, status: e.target.value })}
-            className="w-full px-3 py-2 border rounded-lg text-sm"
-          >
+            className="w-full px-3 py-2 border rounded-lg text-sm">
             <option value="scheduled">По расписанию</option>
             <option value="active">В воздухе</option>
             <option value="completed">Завершён</option>
@@ -169,16 +184,11 @@ export default function EditFlightPage() {
 
         <div>
           <label className="block text-sm font-medium mb-1">Тип ВС *</label>
-          <select
-            value={form.aircraftTypeId}
+          <select value={form.aircraftTypeId}
             onChange={(e) => setForm({ ...form, aircraftTypeId: e.target.value })}
-            required
-            className="w-full px-3 py-2 border rounded-lg text-sm"
-          >
+            required className="w-full px-3 py-2 border rounded-lg text-sm">
             {aircraft.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.modelName}
-              </option>
+              <option key={a.id} value={a.id}>{a.modelName}</option>
             ))}
           </select>
         </div>
@@ -186,35 +196,21 @@ export default function EditFlightPage() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium mb-1">Вылет *</label>
-            <select
-              value={form.departureAirportId}
-              onChange={(e) =>
-                setForm({ ...form, departureAirportId: e.target.value })
-              }
-              required
-              className="w-full px-3 py-2 border rounded-lg text-sm"
-            >
+            <select value={form.departureAirportId}
+              onChange={(e) => setForm({ ...form, departureAirportId: e.target.value })}
+              required className="w-full px-3 py-2 border rounded-lg text-sm">
               {airports.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.iataCode || "?"} — {a.city}
-                </option>
+                <option key={a.id} value={a.id}>{a.iataCode || "?"} — {a.city}</option>
               ))}
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Прилёт *</label>
-            <select
-              value={form.arrivalAirportId}
-              onChange={(e) =>
-                setForm({ ...form, arrivalAirportId: e.target.value })
-              }
-              required
-              className="w-full px-3 py-2 border rounded-lg text-sm"
-            >
+            <select value={form.arrivalAirportId}
+              onChange={(e) => setForm({ ...form, arrivalAirportId: e.target.value })}
+              required className="w-full px-3 py-2 border rounded-lg text-sm">
               {airports.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.iataCode || "?"} — {a.city}
-                </option>
+                <option key={a.id} value={a.id}>{a.iataCode || "?"} — {a.city}</option>
               ))}
             </select>
           </div>
@@ -222,67 +218,68 @@ export default function EditFlightPage() {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Дата вылета *</label>
-            <input
-              type="date"
-              value={form.scheduledDepartureDate}
-              onChange={(e) =>
-                setForm({ ...form, scheduledDepartureDate: e.target.value })
-              }
-              required
-              className="w-full px-3 py-2 border rounded-lg text-sm"
-            />
+            <label className="block text-sm font-medium mb-1">Дата вылета (план) *</label>
+            <input type="date" value={form.scheduledDepartureDate}
+              onChange={(e) => setForm({ ...form, scheduledDepartureDate: e.target.value })}
+              required className="w-full px-3 py-2 border rounded-lg text-sm" />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Время вылета *</label>
-            <input
-              type="time"
-              value={form.scheduledDepartureTime}
-              onChange={(e) =>
-                setForm({ ...form, scheduledDepartureTime: e.target.value })
-              }
-              required
-              className="w-full px-3 py-2 border rounded-lg text-sm"
-            />
+            <label className="block text-sm font-medium mb-1">Время вылета (план) *</label>
+            <input type="time" value={form.scheduledDepartureTime}
+              onChange={(e) => setForm({ ...form, scheduledDepartureTime: e.target.value })}
+              required className="w-full px-3 py-2 border rounded-lg text-sm" />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Дата прилёта *</label>
-            <input
-              type="date"
-              value={form.scheduledArrivalDate}
-              onChange={(e) =>
-                setForm({ ...form, scheduledArrivalDate: e.target.value })
-              }
-              required
-              className="w-full px-3 py-2 border rounded-lg text-sm"
-            />
+            <label className="block text-sm font-medium mb-1">Дата прилёта (план) *</label>
+            <input type="date" value={form.scheduledArrivalDate}
+              onChange={(e) => setForm({ ...form, scheduledArrivalDate: e.target.value })}
+              required className="w-full px-3 py-2 border rounded-lg text-sm" />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Время прилёта *</label>
-            <input
-              type="time"
-              value={form.scheduledArrivalTime}
-              onChange={(e) =>
-                setForm({ ...form, scheduledArrivalTime: e.target.value })
-              }
-              required
-              className="w-full px-3 py-2 border rounded-lg text-sm"
-            />
+            <label className="block text-sm font-medium mb-1">Время прилёта (план) *</label>
+            <input type="time" value={form.scheduledArrivalTime}
+              onChange={(e) => setForm({ ...form, scheduledArrivalTime: e.target.value })}
+              required className="w-full px-3 py-2 border rounded-lg text-sm" />
+          </div>
+        </div>
+
+        <div className="border-t pt-4 mt-4">
+          <h3 className="text-sm font-semibold text-gray-500 mb-3">Фактическое время (необязательно)</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Дата вылета (факт)</label>
+              <input type="date" value={form.actualDepartureDate}
+                onChange={(e) => setForm({ ...form, actualDepartureDate: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Время вылета (факт)</label>
+              <input type="time" value={form.actualDepartureTime}
+                onChange={(e) => setForm({ ...form, actualDepartureTime: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Дата прилёта (факт)</label>
+              <input type="date" value={form.actualArrivalDate}
+                onChange={(e) => setForm({ ...form, actualArrivalDate: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Время прилёта (факт)</label>
+              <input type="time" value={form.actualArrivalTime}
+                onChange={(e) => setForm({ ...form, actualArrivalTime: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg text-sm" />
+            </div>
           </div>
         </div>
 
         <div className="flex gap-3">
-          <button
-            type="submit"
-            disabled={loading}
-            className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
-          >
+          <button type="submit" disabled={loading}
+            className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm">
             {loading ? "Сохранение..." : "💾 Сохранить"}
           </button>
-          <a
-            href={`/admin/flights/${id}/live`}
-            className="bg-orange-600 text-white px-6 py-2 rounded-lg hover:bg-orange-700 text-sm flex items-center gap-1"
-          >
+          <a href={`/admin/flights/${id}/live`}
+            className="bg-orange-600 text-white px-6 py-2 rounded-lg hover:bg-orange-700 text-sm flex items-center gap-1">
             ▶️ Прямой эфир
           </a>
         </div>
