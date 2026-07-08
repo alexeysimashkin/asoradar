@@ -70,6 +70,8 @@ export async function PUT(
       arrivalAirportId: body.arrivalAirportId !== undefined ? body.arrivalAirportId : undefined,
       scheduledDeparture: body.scheduledDeparture ? new Date(body.scheduledDeparture) : undefined,
       scheduledArrival: body.scheduledArrival ? new Date(body.scheduledArrival) : undefined,
+      actualDeparture: body.actualDeparture ? new Date(body.actualDeparture) : body.actualDeparture === null ? null : undefined,
+      actualArrival: body.actualArrival ? new Date(body.actualArrival) : body.actualArrival === null ? null : undefined,
       status: body.status !== undefined ? body.status : undefined,
       isEmergency: body.isEmergency !== undefined ? body.isEmergency : undefined,
     },
