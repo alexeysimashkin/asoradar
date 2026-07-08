@@ -5,6 +5,7 @@ export async function GET() {
   const flights = await prisma.flight.findMany({
     where: {
       status: { in: ["active", "scheduled"] },
+      positions: { some: {} },
     },
     include: {
       departureAirport: { select: { iataCode: true, city: true } },
