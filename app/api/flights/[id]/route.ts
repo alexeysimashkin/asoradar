@@ -84,6 +84,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  await prisma.flightPosition.deleteMany({ where: { flightId: params.id } });
   await prisma.flight.delete({ where: { id: params.id } });
   return new NextResponse(null, { status: 204 });
 }
