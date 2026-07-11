@@ -235,21 +235,31 @@ export default function LiveFlightPage() {
   };
 
   const completeFlight = async () => {
-    if (!confirm("Завершить рейс?")) return;
+    if (!confirm("Завершить рейс? Он будет убран с карты.")) return;
     setCompleting(true);
+    setMessage("");
+
     try {
       const res = await fetch(`/api/flights/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "completed" }),
       });
+
       if (res.ok) {
         const updated = await res.json();
         setFlight(updated);
-        setMessage("✅ Рейс прибыл!");
+        setMessage("✅ Рейс прибыл! Статус: " + updated.status);
+      } else {
+        const err = await res.text();
+        setMessage("❌ Ошибка сервера: " + err);
       }
-    } catch {}
+    } catch (e: any) {
+      setMessage("❌ Ошибка сети: " + e.message);
+    }
+
     setCompleting(false);
+    setTimeout(() => setMessage(""), 5000);
   };
 
   const toggleEmergency = async () => {
